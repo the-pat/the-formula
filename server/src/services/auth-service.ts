@@ -1,0 +1,42 @@
+import bcrypt from "bcryptjs";
+import { Strategy } from "passport-local";
+import { Db } from "mongodb";
+import passport from "passport";
+
+import { UsersService } from "./users-service";
+import { UserId } from "../entities/user";
+
+export const getStrategy = (db: Db) => {
+  const usersService = new UsersService(db);
+
+  const strategy = new Strategy(
+    { usernameField: "email" },
+    async (email, password, done) => {
+      const user = await usersService.login(email, password);
+      return done(null, user);
+    }
+  );
+
+  passport.use(strategy);
+
+  passport.serializeUser((user: UserId, done) => {
+    done(null, user._id);
+  });
+
+  passport.deserializeUser(async (id: string, done) => {
+    const user = await usersService.getById(id);
+    if (user) {
+      return done(null, user);
+    }
+
+    return done("User not found");
+  });
+
+  return {
+    initialized: passport.initialize(),
+    session: passport.session(),
+  };
+};
+
+export const doesPasswordMatch = (password: string, hash: string) =>
+  bcrypt.compare(password, hash);

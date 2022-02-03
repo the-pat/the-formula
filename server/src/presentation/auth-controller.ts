@@ -1,38 +1,39 @@
-import { NextFunction, Request, Response, Router } from "express";
+import { RequestHandler, Router } from "express";
 import passport from "passport";
+import { Controller } from "./controller";
 
-export class AuthController {
-  static path = "/auth";
-  public router: Router;
+const login: RequestHandler = (req, res, next) => {
+  passport.authenticate("local", (err, user) => {
+    if (err || !user) {
+      return res.status(401).json("AUTH_INVALID");
+    }
 
-  constructor() {
-    this.router = Router();
+    return req.logIn(user, (err) => {
+      return err ? next(err) : next();
+    });
+  })(req, res, next);
+};
 
-    // POST /login
-    this.router.post("/login", this.login, this.getLoggedInUser);
+const getLoggedInUser: RequestHandler = (req, res) => {
+  return res.json(req.user);
+};
 
-    // POST /logout
-    this.router.post("/logout", this.logout);
-  }
+const logout: RequestHandler = (req, res) => {
+  req.logout();
+  res.redirect("/");
+};
 
-  login(req: Request, res: Response, next: NextFunction) {
-    passport.authenticate("local", function (err, user) {
-      if (err || !user) {
-        return res.status(401).json("AUTH_INVALID");
-      }
+const router = Router();
 
-      return req.logIn(user, function (err) {
-        return err ? next(err) : next();
-      });
-    })(req, res, next);
-  }
+// POST /login
+router.post("/login", login, getLoggedInUser);
 
-  getLoggedInUser(req: Request, res: Response) {
-    return res.json(req.user);
-  }
+// POST /logout
+router.post("/logout", logout);
 
-  logout(req: Request, res: Response) {
-    req.logout();
-    res.redirect("/");
-  }
-}
+const authController: Controller = {
+  path: "/auth",
+  router,
+};
+
+export default authController;

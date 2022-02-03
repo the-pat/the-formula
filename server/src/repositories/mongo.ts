@@ -3,7 +3,7 @@ import { Config } from "../config";
 
 let db: Db;
 
-export const init = async (config: Config) => {
+export default async (config: Config) => {
   if (db) {
     return db;
   }
@@ -14,3 +14,5 @@ export const init = async (config: Config) => {
 
   return db;
 };
+
+export const getInstance = () => db;

@@ -1,4 +1,5 @@
 export class Config {
+  environment: string;
   port: number;
   mongo: {
     connectionString: string;
@@ -9,6 +10,7 @@ export class Config {
   };
 
   constructor() {
+    this.environment = process.env.ENV || "development";
     this.port = parseInt((process.env.PORT || 4000) as string, 10);
 
     this.mongo = {

@@ -1,40 +1,36 @@
-import { throws } from "assert";
-import { NextFunction, Request, Response, Router } from "express";
-import { Db } from "mongodb";
+import { RequestHandler, Router } from "express";
 
-import { UsersService } from "../services/users-service";
+import * as usersService from "../services/users-service";
+import { Controller } from "./controller";
 
-export class UsersController {
-  static path = "/users";
-  public router: Router;
-  private readonly _usersService: UsersService;
+const createUser: RequestHandler = async (req, res, next) => {
+  const result = await usersService.create(req.body);
 
-  constructor(db: Db) {
-    console.log("here");
-    this.router = Router();
-    this._usersService = new UsersService(db);
+  req.login(result, (err) => {
+    if (err) {
+      next(err);
+    }
+    res.json(result);
+  });
+};
 
-    this.router.post("/create", this.createUser);
-    this.router.get("/me", this.getCurrentUser);
+const getCurrentUser: RequestHandler = async (req, res) => {
+  const user = req.user;
+  if (!user) {
+    throw "UNAUTHORIZED";
   }
 
-  createUser = async (req: Request, res: Response, next: NextFunction) => {
-    const result = await this._usersService.create(req.body);
+  res.json(user);
+};
 
-    req.login(result, (err) => {
-      if (err) {
-        next(err);
-      }
-      res.json(result);
-    });
-  };
+const router = Router();
 
-  getCurrentUser = async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw "UNAUTHORIZED";
-    }
+router.post("/create", createUser);
+router.get("/me", getCurrentUser);
 
-    res.json(user);
-  };
-}
+const usersController: Controller = {
+  path: "/users",
+  router,
+};
+
+export default usersController;

@@ -1,56 +1,52 @@
 import _ from "lodash";
-import { Db, ObjectId } from "mongodb";
+import { ObjectId } from "mongodb";
 
-import { User } from "../entities/user";
+import * as mongo from "../repositories/mongo";
+import { User, createUser, toMongoUser } from "../entities/user";
 import { doesPasswordMatch } from "./auth-service";
 
-export class UsersService {
-  private _db: Db;
+const db = mongo.getInstance();
 
-  constructor(db: Db) {
-    this._db = db;
-  }
+export const getByEmail = async (email: string) => {
+  return await db.collection("users").findOne<User>({ email });
+};
 
-  getByEmail(email: string) {
-    return this._db.collection("users").findOne<User>({ email });
-  }
+export const getById = async (id: string) => {
+  return await db.collection("users").findOne<User>({ _id: new ObjectId(id) });
+};
 
-  getById(id: string) {
-    return this._db
-      .collection("users")
-      .findOne<User>({ _id: new ObjectId(id) });
-  }
+export const create = async (user: User) => {
+  const newUser = await createUser(user.email, user.password);
+  await db.collection("users").insertOne(toMongoUser(newUser, new Date()));
+  return newUser;
+};
 
-  async create(user: User) {
-    const newUser = await User.create(user.email, user.password);
-    await this._db.collection("users").insertOne(newUser.toMongo());
-    return newUser;
-  }
+export const update = async (user: Partial<User>) => {
+  return await db
+    .collection("users")
+    .updateOne({ _id: user._id }, { $set: _.omit(user, "_id") });
+};
 
-  async update(user: Partial<User>) {
-    return await this._db
-      .collection("users")
-      .updateOne({ _id: user._id }, { $set: _.omit(user, "_id") });
-  }
+export const updatelastLoggedInAt = async (
+  userId: ObjectId,
+  lastLoginDate: Date
+) => {
+  return await db
+    .collection("users")
+    .updateOne({ _id: userId }, { $set: { lastLoggedInAt: lastLoginDate } });
+};
 
-  async updatelastLoggedInAt(userId: ObjectId, lastLoginDate: Date) {
-    return await this._db
-      .collection("users")
-      .updateOne({ _id: userId }, { $set: { lastLoggedInAt: lastLoginDate } });
-  }
-
-  async login(email: string, password: string) {
-    const user = await this.getByEmail(email);
-    if (!user) {
-      throw "Invalid email or password";
-    }
-
-    const isMatch = await doesPasswordMatch(password, user.password);
-    if (isMatch) {
-      await this.updatelastLoggedInAt(user._id, new Date());
-      return _.omit(user, "password");
-    }
-
+export const login = async (email: string, password: string) => {
+  const user = await getByEmail(email);
+  if (!user) {
     throw "Invalid email or password";
   }
-}
+
+  const isMatch = await doesPasswordMatch(password, user.password);
+  if (isMatch) {
+    await updatelastLoggedInAt(user._id, new Date());
+    return _.omit(user, "password");
+  }
+
+  throw "Invalid email or password";
+};

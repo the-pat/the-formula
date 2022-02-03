@@ -6,16 +6,17 @@ import express, { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import helmet from "helmet";
 import createError, { HttpError } from "http-errors";
-import { Db } from "mongodb";
 import logger from "morgan";
 import { Config } from "./config";
 
-import { AuthController } from "./presentation/auth-controller";
-import { UsersController } from "./presentation/users-controller";
-import { init } from "./repositories/db";
-import { getStrategy } from "./services/auth-service";
+import authController from "./presentation/auth-controller";
+import usersController from "./presentation/users-controller";
+import mongo from "./repositories/mongo";
+import strategy from "./services/auth-service";
 
-function setupMiddleware(app: Express, config: Config) {
+type SetupHandler = (app: Express, config: Config) => void;
+
+const setupMiddleware: SetupHandler = (app, config) => {
   app.use(logger("dev"));
   app.use(compression());
   app.use(helmet());
@@ -33,7 +34,7 @@ function setupMiddleware(app: Express, config: Config) {
 
   const defaultCookieOptions = { maxAge: 604800000 };
   const cookieOptions: session.CookieOptions =
-    process.env.ENV === "production"
+    config.environment === "production"
       ? { ...defaultCookieOptions, secure: true, httpOnly: true }
       : defaultCookieOptions;
 
@@ -48,25 +49,25 @@ function setupMiddleware(app: Express, config: Config) {
   );
 
   return app;
-}
+};
 
-function setupAuth(app: Express, db: Db) {
-  const { initialized, session } = getStrategy(db);
+const setupAuth: SetupHandler = (app, _config) => {
+  const { initialized, session } = strategy;
 
   app.use(initialized);
   app.use(session);
-}
+};
 
-function setupRoutes(app: Express, db: Db) {
-  app.use(AuthController.path, new AuthController().router);
-  app.use(UsersController.path, new UsersController(db).router);
+const setupRoutes: SetupHandler = (app, _config) => {
+  app.use(authController.path, authController.router);
+  app.use(usersController.path, usersController.router);
 
-  app.use((_req: Request, _res: Response, next: NextFunction) => {
+  app.use((_req, _res, next) => {
     next(createError(404));
   });
 
   app.use(
-    (err: HttpError, req: Request, res: Response, _next: NextFunction) => {
+    (err: HttpError, _req: Request, res: Response, _next: NextFunction) => {
       res.status(err.status || 500);
       res.json({
         message: err.message,
@@ -76,17 +77,17 @@ function setupRoutes(app: Express, db: Db) {
   );
 
   return app;
-}
+};
 
-export default async function start(config: Config) {
+export default async (config: Config) => {
   const app = express();
-  const db = await init(config);
+  await mongo(config);
 
   setupMiddleware(app, config);
-  setupAuth(app, db);
-  setupRoutes(app, db);
+  setupAuth(app, config);
+  setupRoutes(app, config);
 
   app.listen(config.port, () => {
     console.log(`Listening at ${config.port}`);
   });
-}
+};
